@@ -17,6 +17,7 @@ df = df.dropna(subset=['maintext', 'date_publish'])
 df_sample = df.sample(n=min(4000, len(df)), random_state=42).sort_values('date_publish')
 docs = df_sample['maintext'].tolist()
 timestamps = df_sample['date_publish'].tolist()
+domain = df_sample["url"].tolist()
 
 print(f" Training BERTopic on {len(docs)} articles...")
 
@@ -32,6 +33,8 @@ topic_model = BERTopic(
 )
 
 topics, probs = topic_model.fit_transform(docs)
+topic_model.reduce_topics(docs, nr_topics=5) #merges the most similar topics
+topics = topic_model.topics_
 
 df_sample = df_sample.copy()
 df_sample["topic"] = topics #attach resulting index back to the texts
@@ -54,18 +57,6 @@ print("\n SUCCESS! 'narrative_pulse_data.csv' is ready for your VAR model.")
 
 topic_dfs= {}
 
-for topic_id in df_sample["topic"].unique():
-    if topic_id == -1: #ignore the articles that couldnt be classified
-        continue
-    topic_dfs[topic_id] = df_sample[df_sample["topic"] == topic_id] #split dataset into mini datasets of 
-                                                                    #articles based on topics
-
-for topic_id, tdf in topic_dfs.items():##loop through each cluster
-    print(f"topic {topic_id}")
-    for i, row in tdf.head(5).iterrows(): #get first 5 article per topic
-        print(f"article {i}")
-        print(row["maintext"][:300])  #get the first 300 characters of first 5 artciles
-
 
 
 for topic_id in df_sample["topic"].unique():
@@ -81,4 +72,24 @@ for topic_id in df_sample["topic"].unique():
                              
     for i, row in top_articles.iterrows():
         print("for n: \n")
+        print(row["domain"])
         print(row["maintext"][:300])
+
+        
+#maps topics to daily time series (so im replacing the classifier in grievance_check.py)
+df_sample['date_publish'] = pd.to_datetime(df_sample['date_publish'])
+df_sample = df_sample[df_sample['topic'] != -1]  # drop unclassified
+
+#count articles per topic per day
+daily_ts = (
+    df_sample.groupby([pd.Grouper(key='date_publish', freq='D'), 'topic'])
+    .size()
+    .unstack(fill_value=0)
+)
+
+#rename columns to topic names from BERTopic
+topic_names = topic_info.set_index('Topic')['Name'].to_dict()
+daily_ts.columns = [topic_names.get(c, f"topic_{c}") for c in daily_ts.columns]
+
+daily_ts.to_csv("narrative_timeseries_daily.csv")
+print(daily_ts.tail(10))
