@@ -74,10 +74,11 @@ for topic_id in df_sample["topic"].unique():
     print(f"topic {topic_id}")
     #selects the highest centrality articles per topic
     top_articles = (
-    df_sample[df_sample["topic"] == topic_id]
-    .sort_values("probability", ascending=False)
-    .head(5)
-)                                    
+        df_sample[df_sample["topic"] == topic_id]
+        .sort_values("probability", ascending=False)
+        .head(5)
+    )
+                             
     for i, row in top_articles.iterrows():
         print("for n: \n")
         print(row["maintext"][:300])
